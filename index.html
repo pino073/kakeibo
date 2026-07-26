@@ -4,8 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>家計簿アプリ</title>
+  
+  <!-- LIFFとChart.js、さらにグラフに数値を表示するためのプラグインを読み込み -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  
   <style>
     /* 全体のスタイル */
     body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f5f7fa; color: #333; margin: 0; padding: 0; }
@@ -46,6 +50,15 @@
 
     /* グラフ用コンテナ */
     .chart-container { position: relative; width: 100%; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); box-sizing: border-box; }
+
+    /* カスタムモーダル */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 2000; align-items: center; justify-content: center; }
+    .modal-content { background: #fff; padding: 25px 20px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    .modal-content h3 { margin-top: 0; color: #333; font-size: 18px; }
+    .modal-content p { color: #555; margin-bottom: 25px; line-height: 1.5; font-size: 15px; }
+    .modal-buttons { display: flex; justify-content: space-between; gap: 10px; }
+    .modal-btn-cancel { flex: 1; padding: 12px; background: #eee; border: none; border-radius: 8px; font-weight: bold; color: #555; cursor: pointer; }
+    .modal-btn-ok { flex: 1; padding: 12px; background: #00B900; border: none; border-radius: 8px; font-weight: bold; color: #fff; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -114,7 +127,7 @@
           
           <div class="result-area" id="periodResultArea" style="display: none;">
             <div id="periodResultList"></div>
-            <button class="btn-submit" onclick="recordSummaryDate()" style="margin-top: 20px;">集計日を記録する</button>
+            <button class="btn-submit" onclick="openRecordModal()" style="margin-top: 20px;">集計日を記録する</button>
           </div>
         </div>
 
@@ -149,6 +162,18 @@
     <div id="nav-summary" onclick="switchMainTab('summary')">📊 集計</div>
   </div>
 
+  <!-- 確認用モーダル -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-content">
+      <h3>集計日の記録</h3>
+      <p id="modalDateText"></p>
+      <div class="modal-buttons">
+        <button class="modal-btn-cancel" onclick="closeModal()">キャンセル</button>
+        <button class="modal-btn-ok" onclick="executeRecordSummaryDate()" id="modalOkBtn">記録する</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ==========================================
     // 設定値（※必ず自分のものに変更してください！）
@@ -157,14 +182,16 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyJh1Fk_xvHk8TKQXx6ewMZVS8TGNMhrQuXnONvaVnmEMwIE81q491h-AzmnMabkaQqNA/exec"; // ★GASのウェブアプリURLに変更
 
     // ==========================================
-    // グローバル変数
+    // グローバル変数 & Chart.js プラグイン登録
     // ==========================================
     let isDataFetched = false;
-    let expenseLogs = []; // GASから取得したデータが入る
-    let lastSummaryDate = null; // 前回集計日
-    
+    let expenseLogs = []; 
+    let lastSummaryDate = null; 
     let overallChartInst = null;
     let categoryChartInst = null;
+
+    // データラベル（グラフ上の金額表示）のプラグインを登録
+    Chart.register(ChartDataLabels);
 
     // ==========================================
     // LIFF初期化
@@ -191,7 +218,6 @@
       document.getElementById('nav-' + tab).classList.add('active');
       document.getElementById('view-' + tab).style.display = 'block';
 
-      // 集計タブが開かれたらデータを取得（初回のみ）
       if (tab === 'summary' && !isDataFetched) {
         fetchDataFromGAS();
       }
@@ -208,7 +234,6 @@
       document.getElementById('tab-' + subTab).classList.add('active');
       document.getElementById('sub-' + subTab).style.display = 'block';
 
-      // タブごとにグラフを描画
       if (subTab === 'overall') renderOverallChart();
       if (subTab === 'category') renderCategoryChart();
     }
@@ -236,7 +261,6 @@
           body: JSON.stringify(payload)
         });
         
-        // 成功したら入力欄を空にして、集計データを「未取得」に戻す（次回集計タブを開いた時に最新をとるため）
         document.getElementById('amount').value = '';
         isDataFetched = false; 
         alert('記録しました！');
@@ -260,39 +284,54 @@
         });
         const data = await response.json();
         
-        expenseLogs = data.logs; // ミリ秒のdate, user, item, amountの配列
+        expenseLogs = data.logs;
         lastSummaryDate = data.lastSummaryDate ? new Date(data.lastSummaryDate) : null;
         isDataFetched = true;
 
-        // ショートカットボタンの文字を更新
         updateShortcutButtonText();
-
         document.getElementById('loading').style.display = 'none';
         document.getElementById('summaryContent').style.display = 'block';
         
-        // 全体グラフを描画
         renderOverallChart();
-
       } catch (error) {
         document.getElementById('loadingText').innerText = 'エラーが発生しました。もう一度開いてください。';
       }
     }
 
-    // 【集計】集計日の記録
-    async function recordSummaryDate() {
-      if(!confirm('今日の日にちで「集計日」を記録しますか？')) return;
+    // ==========================================
+    // モーダルと集計日記録ロジック
+    // ==========================================
+    function openRecordModal() {
+      const d = new Date();
+      const dateStr = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
       
+      document.getElementById('modalDateText').innerHTML = `<strong>${dateStr}</strong> を<br>今回の集計日として記録しますか？`;
+      document.getElementById('confirmModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('confirmModal').style.display = 'none';
+    }
+
+    async function executeRecordSummaryDate() {
+      const btn = document.getElementById('modalOkBtn');
+      btn.innerText = '記録中...';
+      btn.disabled = true;
+
       try {
         await fetch(GAS_URL, {
           method: 'POST',
           body: JSON.stringify({ type: 'record_summary_date', date: new Date().toISOString() })
         });
         alert('集計日を記録しました！');
-        // メモリ上の集計日も更新してボタンテキストを直す
         lastSummaryDate = new Date();
         updateShortcutButtonText();
       } catch(e) {
         alert('記録に失敗しました。');
+      } finally {
+        btn.innerText = '記録する';
+        btn.disabled = false;
+        closeModal();
       }
     }
 
@@ -300,7 +339,6 @@
     // データ処理＆グラフ描画ロジック
     // ==========================================
 
-    // 直近6ヶ月の年月ラベル（["2024/02", "2024/03"...]）を取得
     function getLast6MonthsLabels() {
       const labels = [];
       const d = new Date();
@@ -311,7 +349,6 @@
       return labels;
     }
 
-    // 指定した月ラベルに合わせてデータを集計
     function groupLogsByMonth(logs, filterItem = null) {
       const labels = getLast6MonthsLabels();
       const dataMap = {};
@@ -319,7 +356,6 @@
 
       logs.forEach(log => {
         if (filterItem && log.item !== filterItem) return;
-        
         const d = new Date(log.date);
         const key = `${d.getFullYear()}/${d.getMonth() + 1}`;
         if (dataMap[key] !== undefined) {
@@ -328,6 +364,25 @@
       });
       return labels.map(l => dataMap[l]);
     }
+
+    // グラフの共通設定（上部に余白を設け、数値を表示する）
+    const commonChartOptions = {
+      responsive: true,
+      layout: { padding: { top: 25 } }, // ラベルが見切れないように余白
+      plugins: {
+        legend: { position: 'bottom' },
+        datalabels: {
+          align: 'end',
+          anchor: 'end',
+          color: '#555',
+          font: { weight: 'bold', size: 11 },
+          formatter: function(value) {
+            return value > 0 ? '¥' + value.toLocaleString() : '';
+          }
+        }
+      },
+      scales: { y: { beginAtZero: true } }
+    };
 
     // 【全体】グラフの描画
     function renderOverallChart() {
@@ -351,11 +406,7 @@
             tension: 0.3
           }]
         },
-        options: {
-          responsive: true,
-          plugins: { legend: { position: 'bottom' } },
-          scales: { y: { beginAtZero: true } }
-        }
+        options: commonChartOptions
       });
     }
 
@@ -379,11 +430,7 @@
             borderRadius: 4
           }]
         },
-        options: {
-          responsive: true,
-          plugins: { legend: { position: 'bottom' } },
-          scales: { y: { beginAtZero: true } }
-        }
+        options: commonChartOptions
       });
     }
 
@@ -409,24 +456,20 @@
       return `${y}-${m}-${d}`;
     }
 
-    // ショートカットボタン押下時
     function setShortcutPeriod() {
       const end = new Date();
       let start;
       if (lastSummaryDate) {
-        // 前回集計日の翌日をスタートにする
         start = new Date(lastSummaryDate.getTime() + 86400000); 
       } else {
-        // なければ先月15日などをデフォルトに
         start = new Date(end.getFullYear(), end.getMonth() - 1, 15);
       }
-
       document.getElementById('startDate').value = formatDate(start);
       document.getElementById('endDate').value = formatDate(end);
-      calculatePeriod(); // そのまま計算実行
+      calculatePeriod(); 
     }
 
-    // 期間を指定して計算
+    // 期間を指定して計算（人ごとの内訳対応）
     function calculatePeriod() {
       const startStr = document.getElementById('startDate').value;
       const endStr = document.getElementById('endDate').value;
@@ -436,50 +479,94 @@
 
       const start = new Date(startStr);
       const end = new Date(endStr);
-      end.setHours(23, 59, 59); // その日の終わりまで
+      end.setHours(23, 59, 59);
 
-      // データの絞り込みとカテゴリ別集計
-      const itemTotals = {};
-      let grandTotal = 0;
+      // 集計用のハコを用意
+      const itemTotals = {};         // 項目別合計
+      const itemUserTotals = {};     // 項目ごとのユーザー別合計
+      const userTotals = {};         // ユーザー全体の合計
+      let grandTotal = 0;            // 総合計
 
       expenseLogs.forEach(log => {
         const logDate = new Date(log.date);
         if (logDate >= start && logDate <= end) {
-          if (!itemTotals[log.item]) itemTotals[log.item] = 0;
-          itemTotals[log.item] += log.amount;
-          grandTotal += log.amount;
+          const item = log.item;
+          const user = log.user || '不明';
+          const amount = log.amount;
+
+          // 項目別
+          if (!itemTotals[item]) itemTotals[item] = 0;
+          itemTotals[item] += amount;
+
+          // 項目 × ユーザー別
+          if (!itemUserTotals[item]) itemUserTotals[item] = {};
+          if (!itemUserTotals[item][user]) itemUserTotals[item][user] = 0;
+          itemUserTotals[item][user] += amount;
+
+          // ユーザー全体別
+          if (!userTotals[user]) userTotals[user] = 0;
+          userTotals[user] += amount;
+
+          grandTotal += amount;
         }
       });
 
-      // 結果を画面に表示
-      const resultArea = document.getElementById('periodResultArea');
       const listArea = document.getElementById('periodResultList');
       listArea.innerHTML = '';
 
       if (Object.keys(itemTotals).length === 0) {
         listArea.innerHTML = '<div style="text-align:center; color:#999; padding:10px;">データがありません</div>';
       } else {
-        // 金額が大きい順にソートして表示
+        let html = '';
         const sortedItems = Object.keys(itemTotals).sort((a, b) => itemTotals[b] - itemTotals[a]);
-        
+
+        // ① 項目ごとの内訳を表示
         sortedItems.forEach(item => {
-          listArea.innerHTML += `
-            <div class="result-row">
+          // 項目のヘッダー行
+          html += `
+            <div class="result-row" style="font-weight:bold; color:#333; margin-top:15px; border-bottom: 2px solid #eee;">
               <span>${item}</span>
               <span>¥${itemTotals[item].toLocaleString()}</span>
             </div>
           `;
+          // その項目のユーザー内訳
+          const users = Object.keys(itemUserTotals[item]);
+          users.forEach(u => {
+            html += `
+              <div class="result-row" style="border:none; padding: 4px 0 4px 15px; font-size: 14px; color: #666;">
+                <span>↳ ${u}</span>
+                <span>¥${itemUserTotals[item][u].toLocaleString()}</span>
+              </div>
+            `;
+          });
         });
-        
-        listArea.innerHTML += `
-          <div class="result-row total">
+
+        // 仕切り線
+        html += '<div style="margin: 20px 0; border-top: 2px dashed #ddd;"></div>';
+
+        // ② 人ごとの合計を表示
+        html += '<div style="font-weight:bold; color:#333; margin-bottom:10px;">👤 ユーザー別合計</div>';
+        Object.keys(userTotals).forEach(u => {
+          html += `
+            <div class="result-row" style="border:none; padding: 6px 0; font-size: 15px;">
+              <span>${u}</span>
+              <span style="font-weight:bold; color:#00B900;">¥${userTotals[u].toLocaleString()}</span>
+            </div>
+          `;
+        });
+
+        // ③ 総合計
+        html += `
+          <div class="result-row total" style="margin-top: 20px;">
             <span>総合計</span>
             <span>¥${grandTotal.toLocaleString()}</span>
           </div>
         `;
+
+        listArea.innerHTML = html;
       }
 
-      resultArea.style.display = 'block';
+      document.getElementById('periodResultArea').style.display = 'block';
     }
 
   </script>
