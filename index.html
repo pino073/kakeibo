@@ -4,56 +4,89 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>家計簿入力</title>
+  <title>家計簿アプリ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; padding: 20px; margin: 0; }
+    
+    /* タブのデザイン */
+    .tab-container { display: flex; margin-bottom: 20px; background: #ddd; border-radius: 8px; padding: 4px; }
+    .tab-btn { flex: 1; padding: 10px; text-align: center; background: transparent; border: none; font-size: 16px; font-weight: bold; color: #666; border-radius: 6px; cursor: pointer; }
+    .tab-btn.active { background: #fff; color: #06C755; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+    /* 画面切り替え用エリア */
+    .view-section { display: none; }
+    .view-section.active-view { display: block; }
+
+    /* フォーム等のスタイル */
     h2 { text-align: center; color: #333; font-size: 20px; margin-bottom: 20px;}
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 14px;}
     select, input[type="number"], input[type="text"] { width: 100%; padding: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; background-color: #fff; }
-    button { width: 100%; padding: 15px; background-color: #06C755; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
+    button[type="submit"] { width: 100%; padding: 15px; background-color: #06C755; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
     button:disabled { background-color: #ccc; }
     #message { text-align: center; margin-top: 15px; font-size: 14px; color: #ff3333; font-weight: bold; }
     #loading { text-align: center; margin-bottom: 15px; color: #666; font-size: 14px; font-weight: bold;}
-    #inputForm { display: none; }
-    /* 自由入力欄はデフォルトで隠す */
+    #inputFormWrapper { display: none; }
     #customItemContainer { display: none; margin-top: 10px; }
+
+    /* 集計画面の仮デザイン */
+    .summary-card { background: #fff; padding: 20px; border-radius: 8px; text-align: center; color: #666; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
   </style>
 </head>
 <body>
-  <h2>💸 家計簿入力</h2>
+
+  <!-- タブメニュー -->
+  <div class="tab-container">
+    <button class="tab-btn active" id="btnInput" onclick="switchTab('input')">📝 入力</button>
+    <button class="tab-btn" id="btnSummary" onclick="switchTab('summary')">📊 集計</button>
+  </div>
+
   <div id="loading">LINEと接続中...</div>
 
-  <form id="inputForm">
-    <div class="form-group">
-      <label for="item">項目</label>
-      <select id="item" required onchange="toggleCustomItem()">
-        <option value="食費">食費</option>
-        <option value="日用品">日用品</option>
-        <option value="Netflix">Netflix</option>
-        <option value="NHK">NHK</option>
-        <option value="ガス">ガス</option>
-        <option value="電気">電気</option>
-        <option value="ネット">ネット</option>
-        <option value="アマプラ">アマプラ</option>
-        <option value="水道">水道</option>
-        <option value="AppleMusic">AppleMusic</option>
-        <option value="先月残り">先月残り</option>
-        <option value="自由入力">自由入力</option>
-      </select>
-      
-      <!-- 自由入力が選ばれたときだけ出る入力欄 -->
-      <div id="customItemContainer">
-        <input type="text" id="customItem" placeholder="具体的な項目名を入力">
-      </div>
-    </div>
+  <!-- ① 入力画面エリア -->
+  <div id="inputView" class="view-section active-view">
+    <h2>💸 家計簿入力</h2>
+    <div id="inputFormWrapper">
+      <form id="inputForm">
+        <div class="form-group">
+          <label for="item">項目</label>
+          <select id="item" required onchange="toggleCustomItem()">
+            <option value="食費">食費</option>
+            <option value="日用品">日用品</option>
+            <option value="Netflix">Netflix</option>
+            <option value="NHK">NHK</option>
+            <option value="ガス">ガス</option>
+            <option value="電気">電気</option>
+            <option value="ネット">ネット</option>
+            <option value="アマプラ">アマプラ</option>
+            <option value="水道">水道</option>
+            <option value="AppleMusic">AppleMusic</option>
+            <option value="先月残り">先月残り</option>
+            <option value="自由入力">自由入力</option>
+          </select>
+          
+          <div id="customItemContainer">
+            <input type="text" id="customItem" placeholder="具体的な項目名を入力">
+          </div>
+        </div>
 
-    <div class="form-group">
-      <label for="amount">金額（円）</label>
-      <input type="number" id="amount" placeholder="例: 300" required pattern="\d*">
+        <div class="form-group">
+          <label for="amount">金額（円）</label>
+          <input type="number" id="amount" placeholder="例: 300" required pattern="\d*">
+        </div>
+        <button type="submit" id="submitBtn">送信する</button>
+      </form>
     </div>
-    <button type="submit" id="submitBtn">送信する</button>
-  </form>
+  </div>
+
+  <!-- ② 集計画面エリア（今はダミー表示） -->
+  <div id="summaryView" class="view-section">
+    <h2>📊 今月の集計</h2>
+    <div class="summary-card">
+      <p>ここに今後の集計データが表示されます。</p>
+      <p style="font-size: 14px; color: #999;">（現在はタブの切り替えテスト中です）</p>
+    </div>
+  </div>
   
   <div id="message"></div>
 
@@ -78,7 +111,7 @@
           liff.getProfile().then(profile => {
             currentUserId = profile.userId;
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('inputForm').style.display = 'block';
+            document.getElementById('inputFormWrapper').style.display = 'block';
           }).catch(err => {
             document.getElementById('message').innerText = "ユーザー情報の取得に失敗しました。";
           });
@@ -88,7 +121,27 @@
         });
     });
 
-    // 項目で「自由入力」が選ばれたときの表示・非表示切り替え
+    // タブを切り替える関数
+    function switchTab(tabName) {
+      const btnInput = document.getElementById('btnInput');
+      const btnSummary = document.getElementById('btnSummary');
+      const inputView = document.getElementById('inputView');
+      const summaryView = document.getElementById('summaryView');
+
+      if (tabName === 'input') {
+        btnInput.classList.add('active');
+        btnSummary.classList.remove('active');
+        inputView.classList.add('active-view');
+        summaryView.classList.remove('active-view');
+      } else {
+        btnSummary.classList.add('active');
+        btnInput.classList.remove('active');
+        summaryView.classList.add('active-view');
+        inputView.classList.remove('active-view');
+      }
+    }
+
+    // 自由入力の切り替え
     function toggleCustomItem() {
       const selectBox = document.getElementById('item');
       const customContainer = document.getElementById('customItemContainer');
@@ -96,14 +149,15 @@
 
       if (selectBox.value === "自由入力") {
         customContainer.style.display = 'block';
-        customInput.required = true; // 自由入力のときは入力必須にする
+        customInput.required = true;
       } else {
         customContainer.style.display = 'none';
         customInput.required = false;
-        customInput.value = ''; // クリアする
+        customInput.value = '';
       }
     }
 
+    // フォーム送信
     document.getElementById('inputForm').addEventListener('submit', function(e) {
       e.preventDefault();
       
@@ -111,7 +165,6 @@
       btn.disabled = true;
       btn.innerText = "送信中...";
       
-      // 項目が「自由入力」の場合は、カスタム入力欄の文字を項目名として採用する
       let selectedItem = document.getElementById('item').value;
       if (selectedItem === "自由入力") {
         selectedItem = document.getElementById('customItem').value;
