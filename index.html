@@ -10,12 +10,14 @@
     h2 { text-align: center; color: #333; font-size: 20px; margin-bottom: 20px;}
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 14px;}
-    select, input[type="number"] { width: 100%; padding: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; background-color: #fff; }
+    select, input[type="number"], input[type="text"] { width: 100%; padding: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; background-color: #fff; }
     button { width: 100%; padding: 15px; background-color: #06C755; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
     button:disabled { background-color: #ccc; }
     #message { text-align: center; margin-top: 15px; font-size: 14px; color: #ff3333; font-weight: bold; }
     #loading { text-align: center; margin-bottom: 15px; color: #666; font-size: 14px; font-weight: bold;}
     #inputForm { display: none; }
+    /* 自由入力欄はデフォルトで隠す */
+    #customItemContainer { display: none; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -25,13 +27,27 @@
   <form id="inputForm">
     <div class="form-group">
       <label for="item">項目</label>
-      <select id="item" required>
+      <select id="item" required onchange="toggleCustomItem()">
         <option value="食費">食費</option>
         <option value="日用品">日用品</option>
-        <option value="外食">外食</option>
-        <option value="その他">その他</option>
+        <option value="Netflix">Netflix</option>
+        <option value="NHK">NHK</option>
+        <option value="ガス">ガス</option>
+        <option value="電気">電気</option>
+        <option value="ネット">ネット</option>
+        <option value="アマプラ">アマプラ</option>
+        <option value="水道">水道</option>
+        <option value="AppleMusic">AppleMusic</option>
+        <option value="先月残り">先月残り</option>
+        <option value="自由入力">自由入力</option>
       </select>
+      
+      <!-- 自由入力が選ばれたときだけ出る入力欄 -->
+      <div id="customItemContainer">
+        <input type="text" id="customItem" placeholder="具体的な項目名を入力">
+      </div>
     </div>
+
     <div class="form-group">
       <label for="amount">金額（円）</label>
       <input type="number" id="amount" placeholder="例: 300" required pattern="\d*">
@@ -44,6 +60,7 @@
   <!-- LINE LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
+    // ★★★ ここにあなたのLIFF IDとGASのURLを貼り付けてください ★★★
     const LIFF_ID = "2010678605-p8XJOK3T";
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyJh1Fk_xvHk8TKQXx6ewMZVS8TGNMhrQuXnONvaVnmEMwIE81q491h-AzmnMabkaQqNA/exec";
 
@@ -71,6 +88,22 @@
         });
     });
 
+    // 項目で「自由入力」が選ばれたときの表示・非表示切り替え
+    function toggleCustomItem() {
+      const selectBox = document.getElementById('item');
+      const customContainer = document.getElementById('customItemContainer');
+      const customInput = document.getElementById('customItem');
+
+      if (selectBox.value === "自由入力") {
+        customContainer.style.display = 'block';
+        customInput.required = true; // 自由入力のときは入力必須にする
+      } else {
+        customContainer.style.display = 'none';
+        customInput.required = false;
+        customInput.value = ''; // クリアする
+      }
+    }
+
     document.getElementById('inputForm').addEventListener('submit', function(e) {
       e.preventDefault();
       
@@ -78,10 +111,16 @@
       btn.disabled = true;
       btn.innerText = "送信中...";
       
+      // 項目が「自由入力」の場合は、カスタム入力欄の文字を項目名として採用する
+      let selectedItem = document.getElementById('item').value;
+      if (selectedItem === "自由入力") {
+        selectedItem = document.getElementById('customItem').value;
+      }
+
       const postData = {
         type: "liff_form",
         userId: currentUserId,
-        item: document.getElementById('item').value,
+        item: selectedItem,
         amount: document.getElementById('amount').value
       };
 
