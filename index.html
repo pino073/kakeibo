@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>家計簿入力</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; padding: 20px; margin: 0; }
+    h2 { text-align: center; color: #333; font-size: 20px; margin-bottom: 20px;}
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 14px;}
+    select, input[type="number"] { width: 100%; padding: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; background-color: #fff; }
+    button { width: 100%; padding: 15px; background-color: #06C755; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
+    button:disabled { background-color: #ccc; }
+    #message { text-align: center; margin-top: 15px; font-size: 14px; color: #ff3333; font-weight: bold; }
+    #loading { text-align: center; margin-bottom: 15px; color: #666; font-size: 14px; font-weight: bold;}
+    #inputForm { display: none; }
+  </style>
+</head>
+<body>
+  <h2>💸 家計簿入力</h2>
+  <div id="loading">LINEと接続中...</div>
+
+  <form id="inputForm">
+    <div class="form-group">
+      <label for="item">項目</label>
+      <select id="item" required>
+        <option value="食費">食費</option>
+        <option value="日用品">日用品</option>
+        <option value="外食">外食</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="amount">金額（円）</label>
+      <input type="number" id="amount" placeholder="例: 300" required pattern="\d*">
+    </div>
+    <button type="submit" id="submitBtn">送信する</button>
+  </form>
+  
+  <div id="message"></div>
+
+  <!-- LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    const LIFF_ID = "2010678605-p8XJOK3T";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyJh1Fk_xvHk8TKQXx6ewMZVS8TGNMhrQuXnONvaVnmEMwIE81q491h-AzmnMabkaQqNA/exec";
+
+    let currentUserId = "";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById('loading').style.display = 'block';
+
+      liff.init({ liffId: LIFF_ID })
+        .then(() => {
+          if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+          }
+          liff.getProfile().then(profile => {
+            currentUserId = profile.userId;
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('inputForm').style.display = 'block';
+          }).catch(err => {
+            document.getElementById('message').innerText = "ユーザー情報の取得に失敗しました。";
+          });
+        })
+        .catch((err) => {
+          document.getElementById('message').innerText = "LIFFの設定を確認してください: " + err.message;
+        });
+    });
+
+    document.getElementById('inputForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerText = "送信中...";
+      
+      const postData = {
+        type: "liff_form",
+        userId: currentUserId,
+        item: document.getElementById('item').value,
+        amount: document.getElementById('amount').value
+      };
+
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(postData)
+      })
+      .then(() => {
+        liff.closeWindow();
+      })
+      .catch(err => {
+        document.getElementById('message').innerText = "通信エラーが発生しました。";
+        btn.disabled = false;
+        btn.innerText = "送信する";
+      });
+    });
+  </script>
+</body>
+</html>
