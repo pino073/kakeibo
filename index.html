@@ -1,197 +1,487 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>家計簿アプリ</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; padding: 20px; margin: 0; }
+    /* 全体のスタイル */
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f5f7fa; color: #333; margin: 0; padding: 0; }
+    h2 { text-align: center; color: #4A4A4A; font-size: 18px; margin: 15px 0; }
+    .container { padding: 15px; padding-bottom: 80px; }
     
-    /* タブのデザイン */
-    .tab-container { display: flex; margin-bottom: 20px; background: #ddd; border-radius: 8px; padding: 4px; }
-    .tab-btn { flex: 1; padding: 10px; text-align: center; background: transparent; border: none; font-size: 16px; font-weight: bold; color: #666; border-radius: 6px; cursor: pointer; }
-    .tab-btn.active { background: #fff; color: #06C755; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    /* メインタブ (画面下部固定) */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; display: flex; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000; }
+    .bottom-nav div { flex: 1; text-align: center; padding: 15px 0; font-size: 16px; font-weight: bold; color: #ccc; cursor: pointer; transition: 0.3s; }
+    .bottom-nav div.active { color: #00B900; border-top: 3px solid #00B900; }
 
-    /* 画面切り替え用エリア */
-    .view-section { display: none; }
-    .view-section.active-view { display: block; }
+    /* サブタブ (集計画面の上部) */
+    .sub-tabs { display: flex; justify-content: center; margin-bottom: 20px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .sub-tabs button { flex: 1; padding: 10px 0; border: none; background: #fff; color: #666; font-size: 14px; font-weight: bold; transition: 0.3s; }
+    .sub-tabs button.active { background: #00B900; color: #fff; }
 
-    /* フォーム等のスタイル */
-    h2 { text-align: center; color: #333; font-size: 20px; margin-bottom: 20px;}
-    .form-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 14px;}
-    select, input[type="number"], input[type="text"] { width: 100%; padding: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; background-color: #fff; }
-    button[type="submit"] { width: 100%; padding: 15px; background-color: #06C755; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
-    button:disabled { background-color: #ccc; }
-    #message { text-align: center; margin-top: 15px; font-size: 14px; color: #ff3333; font-weight: bold; }
-    #loading { text-align: center; margin-bottom: 15px; color: #666; font-size: 14px; font-weight: bold;}
-    #inputFormWrapper { display: none; }
-    #customItemContainer { display: none; margin-top: 10px; }
+    /* フォーム要素 */
+    .form-group { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    label { display: block; font-weight: bold; margin-bottom: 8px; color: #555; font-size: 14px; }
+    select, input[type="number"], input[type="date"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background-color: #fafafa; }
+    
+    /* ボタン */
+    .btn-submit { width: 100%; padding: 15px; background-color: #00B900; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,185,0,0.3); transition: 0.2s; margin-top: 10px; }
+    .btn-submit:active { transform: translateY(2px); box-shadow: 0 2px 5px rgba(0,185,0,0.3); }
+    .btn-shortcut { width: 100%; padding: 10px; background-color: #ebfbee; color: #00B900; border: 1px solid #00B900; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 15px; cursor: pointer; }
+    .btn-calc { width: 100%; padding: 12px; background-color: #333; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 20px; }
+    
+    /* 期間別結果表示エリア */
+    .result-area { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .result-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .result-row:last-child { border-bottom: none; }
+    .result-row.total { font-weight: bold; color: #FF4500; font-size: 18px; border-top: 2px solid #ddd; margin-top: 10px; padding-top: 10px; }
 
-    /* 集計画面の仮デザイン */
-    .summary-card { background: #fff; padding: 20px; border-radius: 8px; text-align: center; color: #666; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    /* ローディング画面 */
+    #loading { display: none; text-align: center; padding: 40px 0; color: #666; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #00B900; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* グラフ用コンテナ */
+    .chart-container { position: relative; width: 100%; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); box-sizing: border-box; }
   </style>
 </head>
 <body>
 
-  <!-- タブメニュー -->
-  <div class="tab-container">
-    <button class="tab-btn active" id="btnInput" onclick="switchTab('input')">📝 入力</button>
-    <button class="tab-btn" id="btnSummary" onclick="switchTab('summary')">📊 集計</button>
-  </div>
+  <div class="container">
+    
+    <!-- ==================== 【入力タブ】 ==================== -->
+    <div id="view-input">
+      <h2>支出を入力</h2>
+      <div class="form-group">
+        <label for="item">カテゴリ</label>
+        <select id="item">
+          <option value="食費">食費</option>
+          <option value="日用品">日用品</option>
+          <option value="外食">外食</option>
+          <option value="交際費">交際費</option>
+          <option value="交通費">交通費</option>
+          <option value="趣味">趣味</option>
+          <option value="固定費">固定費</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="amount">金額（円）</label>
+        <input type="number" id="amount" placeholder="例: 1500" pattern="\d*">
+      </div>
+      <button class="btn-submit" onclick="submitForm()" id="submitBtn">記録する</button>
+    </div>
 
-  <div id="loading">LINEと接続中...</div>
+    <!-- ==================== 【集計タブ】 ==================== -->
+    <div id="view-summary" style="display: none;">
+      <h2>集計レポート</h2>
+      
+      <!-- データ読み込み中 -->
+      <div id="loading">
+        <div class="spinner"></div>
+        <div id="loadingText">データを取得中...</div>
+      </div>
 
-  <!-- ① 入力画面エリア -->
-  <div id="inputView" class="view-section active-view">
-    <h2>💸 家計簿入力</h2>
-    <div id="inputFormWrapper">
-      <form id="inputForm">
-        <div class="form-group">
-          <label for="item">項目</label>
-          <select id="item" required onchange="toggleCustomItem()">
-            <option value="食費">食費</option>
-            <option value="日用品">日用品</option>
-            <option value="電気">電気</option>
-            <option value="ガス">ガス</option>
-            <option value="ネット">ネット</option>
-            <option value="水道">水道</option>
-            <option value="NHK">NHK</option>
-            <option value="AmazonPrime">AmazonPrime</option>
-            <option value="Netflix">Netflix</option>
-            <option value="AppleMusic">AppleMusic</option>
-            <option value="先月残り">先月残り</option>
-            <option value="自由入力">自由入力</option>
-          </select>
-          
-          <div id="customItemContainer">
-            <input type="text" id="customItem" placeholder="具体的な項目名を入力">
+      <!-- 集計コンテンツ (ロード完了後に表示) -->
+      <div id="summaryContent" style="display: none;">
+        <div class="sub-tabs">
+          <button id="tab-overall" class="active" onclick="switchSubTab('overall')">全体</button>
+          <button id="tab-period" onclick="switchSubTab('period')">期間別</button>
+          <button id="tab-category" onclick="switchSubTab('category')">カテゴリ別</button>
+        </div>
+
+        <!-- 全体サブタブ -->
+        <div id="sub-overall">
+          <div class="chart-container">
+            <canvas id="overallChart"></canvas>
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="amount">金額（円）</label>
-          <input type="number" id="amount" placeholder="例: 300" required pattern="\d*">
+        <!-- 期間別サブタブ -->
+        <div id="sub-period" style="display: none;">
+          <div class="form-group">
+            <button class="btn-shortcut" id="btnShortcut" onclick="setShortcutPeriod()">前回集計日(未取得) 〜 今日</button>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+              <input type="date" id="startDate" style="width: 45%;">
+              <span style="font-weight: bold; color: #666;">〜</span>
+              <input type="date" id="endDate" style="width: 45%;">
+            </div>
+            <button class="btn-calc" onclick="calculatePeriod()">この期間で計算する</button>
+          </div>
+          
+          <div class="result-area" id="periodResultArea" style="display: none;">
+            <div id="periodResultList"></div>
+            <button class="btn-submit" onclick="recordSummaryDate()" style="margin-top: 20px;">集計日を記録する</button>
+          </div>
         </div>
-        <button type="submit" id="submitBtn">送信する</button>
-      </form>
+
+        <!-- カテゴリ別サブタブ -->
+        <div id="sub-category" style="display: none;">
+          <div class="form-group">
+            <label for="summaryCategorySelect">カテゴリを選択</label>
+            <select id="summaryCategorySelect" onchange="renderCategoryChart()">
+              <option value="食費">食費</option>
+              <option value="日用品">日用品</option>
+              <option value="外食">外食</option>
+              <option value="交際費">交際費</option>
+              <option value="交通費">交通費</option>
+              <option value="趣味">趣味</option>
+              <option value="固定費">固定費</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+          <div class="chart-container">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+
+      </div>
     </div>
+
   </div>
 
-  <!-- ② 集計画面エリア（今はダミー表示） -->
-  <div id="summaryView" class="view-section">
-    <h2>📊 今月の集計</h2>
-    <div class="summary-card">
-      <p>ここに今後の集計データが表示されます。</p>
-      <p style="font-size: 14px; color: #999;">（現在はタブの切り替えテスト中です）</p>
-    </div>
+  <!-- 画面下部ナビゲーション -->
+  <div class="bottom-nav">
+    <div id="nav-input" class="active" onclick="switchMainTab('input')">🖊️ 入力</div>
+    <div id="nav-summary" onclick="switchMainTab('summary')">📊 集計</div>
   </div>
-  
-  <div id="message"></div>
 
-  <!-- LINE LIFF SDK -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    // ★★★ ここにあなたのLIFF IDとGASのURLを貼り付けてください ★★★
-    const LIFF_ID = "2010678605-p8XJOK3T";
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbyJh1Fk_xvHk8TKQXx6ewMZVS8TGNMhrQuXnONvaVnmEMwIE81q491h-AzmnMabkaQqNA/exec";
+    // ==========================================
+    // 設定値（※必ず自分のものに変更してください！）
+    // ==========================================
+    const LIFF_ID = "2010678605-p8XJOK3T"; // ★LIFF IDに変更
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyJh1Fk_xvHk8TKQXx6ewMZVS8TGNMhrQuXnONvaVnmEMwIE81q491h-AzmnMabkaQqNA/exec"; // ★GASのウェブアプリURLに変更
 
-    let currentUserId = "";
+    // ==========================================
+    // グローバル変数
+    // ==========================================
+    let isDataFetched = false;
+    let expenseLogs = []; // GASから取得したデータが入る
+    let lastSummaryDate = null; // 前回集計日
+    
+    let overallChartInst = null;
+    let categoryChartInst = null;
 
-    document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById('loading').style.display = 'block';
+    // ==========================================
+    // LIFF初期化
+    // ==========================================
+    async function initializeLiff() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) { liff.login(); }
+      } catch (error) {
+        console.error('LIFFの初期化に失敗しました', error);
+      }
+    }
+    initializeLiff();
 
-      liff.init({ liffId: LIFF_ID })
-        .then(() => {
-          if (!liff.isLoggedIn()) {
-            liff.login();
-            return;
-          }
-          liff.getProfile().then(profile => {
-            currentUserId = profile.userId;
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('inputFormWrapper').style.display = 'block';
-          }).catch(err => {
-            document.getElementById('message').innerText = "ユーザー情報の取得に失敗しました。";
-          });
-        })
-        .catch((err) => {
-          document.getElementById('message').innerText = "LIFFの設定を確認してください: " + err.message;
-        });
-    });
+    // ==========================================
+    // タブ切り替え制御
+    // ==========================================
+    function switchMainTab(tab) {
+      document.getElementById('nav-input').classList.remove('active');
+      document.getElementById('nav-summary').classList.remove('active');
+      document.getElementById('view-input').style.display = 'none';
+      document.getElementById('view-summary').style.display = 'none';
 
-    // タブを切り替える関数
-    function switchTab(tabName) {
-      const btnInput = document.getElementById('btnInput');
-      const btnSummary = document.getElementById('btnSummary');
-      const inputView = document.getElementById('inputView');
-      const summaryView = document.getElementById('summaryView');
+      document.getElementById('nav-' + tab).classList.add('active');
+      document.getElementById('view-' + tab).style.display = 'block';
 
-      if (tabName === 'input') {
-        btnInput.classList.add('active');
-        btnSummary.classList.remove('active');
-        inputView.classList.add('active-view');
-        summaryView.classList.remove('active-view');
-      } else {
-        btnSummary.classList.add('active');
-        btnInput.classList.remove('active');
-        summaryView.classList.add('active-view');
-        inputView.classList.remove('active-view');
+      // 集計タブが開かれたらデータを取得（初回のみ）
+      if (tab === 'summary' && !isDataFetched) {
+        fetchDataFromGAS();
       }
     }
 
-    // 自由入力の切り替え
-    function toggleCustomItem() {
-      const selectBox = document.getElementById('item');
-      const customContainer = document.getElementById('customItemContainer');
-      const customInput = document.getElementById('customItem');
+    function switchSubTab(subTab) {
+      document.getElementById('tab-overall').classList.remove('active');
+      document.getElementById('tab-period').classList.remove('active');
+      document.getElementById('tab-category').classList.remove('active');
+      document.getElementById('sub-overall').style.display = 'none';
+      document.getElementById('sub-period').style.display = 'none';
+      document.getElementById('sub-category').style.display = 'none';
 
-      if (selectBox.value === "自由入力") {
-        customContainer.style.display = 'block';
-        customInput.required = true;
-      } else {
-        customContainer.style.display = 'none';
-        customInput.required = false;
-        customInput.value = '';
-      }
+      document.getElementById('tab-' + subTab).classList.add('active');
+      document.getElementById('sub-' + subTab).style.display = 'block';
+
+      // タブごとにグラフを描画
+      if (subTab === 'overall') renderOverallChart();
+      if (subTab === 'category') renderCategoryChart();
     }
 
-    // フォーム送信
-    document.getElementById('inputForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      
+    // ==========================================
+    // GASとの通信処理
+    // ==========================================
+    
+    // 【入力】データの送信
+    async function submitForm() {
+      const item = document.getElementById('item').value;
+      const amount = document.getElementById('amount').value;
+      if (!amount) { alert('金額を入力してください。'); return; }
+
       const btn = document.getElementById('submitBtn');
+      btn.innerText = '送信中...';
       btn.disabled = true;
-      btn.innerText = "送信中...";
+
+      try {
+        const profile = await liff.getProfile();
+        const payload = { type: 'liff_form', userId: profile.userId, item: item, amount: amount };
+
+        await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        
+        // 成功したら入力欄を空にして、集計データを「未取得」に戻す（次回集計タブを開いた時に最新をとるため）
+        document.getElementById('amount').value = '';
+        isDataFetched = false; 
+        alert('記録しました！');
+      } catch (error) {
+        alert('エラーが発生しました。');
+      } finally {
+        btn.innerText = '記録する';
+        btn.disabled = false;
+      }
+    }
+
+    // 【集計】データの一括取得
+    async function fetchDataFromGAS() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('summaryContent').style.display = 'none';
+
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify({ type: 'fetch_data' })
+        });
+        const data = await response.json();
+        
+        expenseLogs = data.logs; // ミリ秒のdate, user, item, amountの配列
+        lastSummaryDate = data.lastSummaryDate ? new Date(data.lastSummaryDate) : null;
+        isDataFetched = true;
+
+        // ショートカットボタンの文字を更新
+        updateShortcutButtonText();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('summaryContent').style.display = 'block';
+        
+        // 全体グラフを描画
+        renderOverallChart();
+
+      } catch (error) {
+        document.getElementById('loadingText').innerText = 'エラーが発生しました。もう一度開いてください。';
+      }
+    }
+
+    // 【集計】集計日の記録
+    async function recordSummaryDate() {
+      if(!confirm('今日の日にちで「集計日」を記録しますか？')) return;
       
-      let selectedItem = document.getElementById('item').value;
-      if (selectedItem === "自由入力") {
-        selectedItem = document.getElementById('customItem').value;
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify({ type: 'record_summary_date', date: new Date().toISOString() })
+        });
+        alert('集計日を記録しました！');
+        // メモリ上の集計日も更新してボタンテキストを直す
+        lastSummaryDate = new Date();
+        updateShortcutButtonText();
+      } catch(e) {
+        alert('記録に失敗しました。');
+      }
+    }
+
+    // ==========================================
+    // データ処理＆グラフ描画ロジック
+    // ==========================================
+
+    // 直近6ヶ月の年月ラベル（["2024/02", "2024/03"...]）を取得
+    function getLast6MonthsLabels() {
+      const labels = [];
+      const d = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const temp = new Date(d.getFullYear(), d.getMonth() - i, 1);
+        labels.push(`${temp.getFullYear()}/${temp.getMonth() + 1}`);
+      }
+      return labels;
+    }
+
+    // 指定した月ラベルに合わせてデータを集計
+    function groupLogsByMonth(logs, filterItem = null) {
+      const labels = getLast6MonthsLabels();
+      const dataMap = {};
+      labels.forEach(l => dataMap[l] = 0);
+
+      logs.forEach(log => {
+        if (filterItem && log.item !== filterItem) return;
+        
+        const d = new Date(log.date);
+        const key = `${d.getFullYear()}/${d.getMonth() + 1}`;
+        if (dataMap[key] !== undefined) {
+          dataMap[key] += log.amount;
+        }
+      });
+      return labels.map(l => dataMap[l]);
+    }
+
+    // 【全体】グラフの描画
+    function renderOverallChart() {
+      const labels = getLast6MonthsLabels();
+      const data = groupLogsByMonth(expenseLogs);
+
+      const ctx = document.getElementById('overallChart').getContext('2d');
+      if (overallChartInst) overallChartInst.destroy();
+
+      overallChartInst = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '全項目の合計',
+            data: data,
+            borderColor: '#00B900',
+            backgroundColor: 'rgba(0, 185, 0, 0.2)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    // 【カテゴリ別】グラフの描画
+    function renderCategoryChart() {
+      const selectedItem = document.getElementById('summaryCategorySelect').value;
+      const labels = getLast6MonthsLabels();
+      const data = groupLogsByMonth(expenseLogs, selectedItem);
+
+      const ctx = document.getElementById('categoryChart').getContext('2d');
+      if (categoryChartInst) categoryChartInst.destroy();
+
+      categoryChartInst = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: `${selectedItem}の推移`,
+            data: data,
+            backgroundColor: '#FF9800',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    // ==========================================
+    // 期間別 計算ロジック
+    // ==========================================
+
+    function updateShortcutButtonText() {
+      const btn = document.getElementById('btnShortcut');
+      if (lastSummaryDate) {
+        const m = lastSummaryDate.getMonth() + 1;
+        const d = lastSummaryDate.getDate();
+        btn.innerText = `前回集計日 (${m}/${d}) 〜 今日まで`;
+      } else {
+        btn.innerText = `前回集計日 (未設定) 〜 今日まで`;
+      }
+    }
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = ('0' + (date.getMonth() + 1)).slice(-2);
+      const d = ('0' + date.getDate()).slice(-2);
+      return `${y}-${m}-${d}`;
+    }
+
+    // ショートカットボタン押下時
+    function setShortcutPeriod() {
+      const end = new Date();
+      let start;
+      if (lastSummaryDate) {
+        // 前回集計日の翌日をスタートにする
+        start = new Date(lastSummaryDate.getTime() + 86400000); 
+      } else {
+        // なければ先月15日などをデフォルトに
+        start = new Date(end.getFullYear(), end.getMonth() - 1, 15);
       }
 
-      const postData = {
-        type: "liff_form",
-        userId: currentUserId,
-        item: selectedItem,
-        amount: document.getElementById('amount').value
-      };
+      document.getElementById('startDate').value = formatDate(start);
+      document.getElementById('endDate').value = formatDate(end);
+      calculatePeriod(); // そのまま計算実行
+    }
 
-      fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(postData)
-      })
-      .then(() => {
-        liff.closeWindow();
-      })
-      .catch(err => {
-        document.getElementById('message').innerText = "通信エラーが発生しました。";
-        btn.disabled = false;
-        btn.innerText = "送信する";
+    // 期間を指定して計算
+    function calculatePeriod() {
+      const startStr = document.getElementById('startDate').value;
+      const endStr = document.getElementById('endDate').value;
+      if (!startStr || !endStr) {
+        alert('期間を選択してください'); return;
+      }
+
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      end.setHours(23, 59, 59); // その日の終わりまで
+
+      // データの絞り込みとカテゴリ別集計
+      const itemTotals = {};
+      let grandTotal = 0;
+
+      expenseLogs.forEach(log => {
+        const logDate = new Date(log.date);
+        if (logDate >= start && logDate <= end) {
+          if (!itemTotals[log.item]) itemTotals[log.item] = 0;
+          itemTotals[log.item] += log.amount;
+          grandTotal += log.amount;
+        }
       });
-    });
+
+      // 結果を画面に表示
+      const resultArea = document.getElementById('periodResultArea');
+      const listArea = document.getElementById('periodResultList');
+      listArea.innerHTML = '';
+
+      if (Object.keys(itemTotals).length === 0) {
+        listArea.innerHTML = '<div style="text-align:center; color:#999; padding:10px;">データがありません</div>';
+      } else {
+        // 金額が大きい順にソートして表示
+        const sortedItems = Object.keys(itemTotals).sort((a, b) => itemTotals[b] - itemTotals[a]);
+        
+        sortedItems.forEach(item => {
+          listArea.innerHTML += `
+            <div class="result-row">
+              <span>${item}</span>
+              <span>¥${itemTotals[item].toLocaleString()}</span>
+            </div>
+          `;
+        });
+        
+        listArea.innerHTML += `
+          <div class="result-row total">
+            <span>総合計</span>
+            <span>¥${grandTotal.toLocaleString()}</span>
+          </div>
+        `;
+      }
+
+      resultArea.style.display = 'block';
+    }
+
   </script>
 </body>
 </html>
